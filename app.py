@@ -11,50 +11,92 @@ st.set_page_config(page_title="Monitor Integral - Equipo", layout="wide", page_i
 # Inyección de CSS para que no se vea tan genérico
 st.markdown("""
 <style>
-    /* Estilo para las tarjetas de las métricas (KPIs) */
-[data-testid="stMetric"] {
-        background-color: #ffffff; /* Fondo blanco puro para resaltar */
+    /* 1. KPIs Y CONTENEDOR (Lo que ya te gusta) */
+    .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+    #MainMenu, footer {visibility: hidden;}
+
+    [data-testid="stMetric"] {
+        background-color: #ffffff;
         border: 1px solid #e6e9ef;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-radius: 10px;
+        padding: 10px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-            /* Color de la etiqueta (el nombre del KPI) */
-    [data-testid="stMetricLabel"] {
-        color: #1f1f1f !important; /* Negro/Gris muy oscuro */
-        font-weight: 600 !important;
-        font-size: 1.1rem !important;
+    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; color: #555 !important; }
+    [data-testid="stMetricValue"] { font-size: 1.4rem !important; color: #000 !important; }
+
+    /* 2. SELECTORES Y CAJAS (INPUTS) */
+    .stSelectbox div[data-baseweb="select"], 
+    .stDateInput div[data-baseweb="input"] {
+        font-size: 0.8rem !important;
+        min-height: 28px !important;
     }
-            /* Color del valor (el número) */
-    [data-testid="stMetricValue"] {
-        color: #000000 !important;
-        font-weight: 300 !important;
+
+    /* 3. EL "TRUCO" PARA EL CALENDARIO Y DESPLEGABLES */
+    /* En lugar de cambiar ancho por ancho, encogemos TODO el objeto flotante */
+    div[data-baseweb="popover"] {
+        transform: scale(0.85) !important; /* Encoge todo al 80% */
+        transform-origin: top left !important;
+        z-index: 10000 !important;
     }
-    /* Ocultar menú de hamburguesa y pie de página de Streamlit */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    /* Reducir el espacio en blanco de arriba */
-    .block-container {padding-top: 2rem;}
+
+    /* Ajuste para que el calendario no se pegue al borde izquierdo */
+    div[data-baseweb="calendar"] {
+        margin-left: 5px !important;
+    }
+
+    /* 4. TEXTO DE LAS LISTAS */
+    div[data-baseweb="popover"] li, 
+    div[data-baseweb="popover"] div {
+        font-size: 0.75rem !important;
+        padding: 1px 4px !important;
+    }
+
+    /* 5. SIDEBAR COMPACTA */
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 0.5rem !important;
+        padding-top: 2rem !important;
+    }
+    [data-testid="stWidgetLabel"] p {
+        font-size: 0.8rem !important;
+        margin-bottom: 0px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Monitor Integral: Equipo Bravo")
+st.title("📊 Monitor Integral: Bravo Colombia")
 
+query_hc = """SELECT 
+    email,
+    employee_id,
+    name,
+    job_title,
+    leader,
+    status,
+    joined_resuelve_on,
+    became_inactive_on,
+    cedula
+FROM
+    coyote_employees
+WHERE 
+    office = 'Colombia'
+    AND area = 'Negociación'
+    AND status = 'Activo'
+"""
+df_hc = extraccion_metabase_final(16, query_hc)[['email', 'leader']]
+CORREOS = df_hc['email'].to_list()
+LIDERES = df_hc['leader'].unique().tolist()
 # Tu lista actualizada
-CORREOS = [
-    'william.abril@gobravo.com.co', 
-    'katherine.marulanda@gobravo.com.co', 'isabel.velasquez@gobravo.com.co',
-    'jhonnatan.garcia@gobravo.com.co', 'david.tinjaca@gobravo.com.co', 
-    'ivonne.valbuena@gobravo.com.co', 'milena.perez@gobravo.com.co',
-    'sonia.restrepo@gobravo.com.co',  'juan.portillo@gobravo.com.co'
-]
+
 correos_sql = "'" + "','".join(CORREOS) + "'"
 COLORES = {'llamada': '#2ca02c', 'descanso': '#d62728', 'actualizacion': '#1f77b4'}
 
 # --- 1. FILTROS ---
 st.sidebar.header("Filtros de Búsqueda")
+
+# 1.1 Rango de fechas
 rango = st.sidebar.date_input(
-    "Selecciona el rango de fechas",
+    "1. Rango de fechas",
     value=(datetime.date.today(), datetime.date.today())
 )
 
@@ -63,9 +105,24 @@ if isinstance(rango, tuple) and len(rango) == 2:
 else:
     f_inicio = f_fin = rango if not isinstance(rango, tuple) else rango[0]
 
+# 1.2 Filtro por Líder
+lider_seleccionado = st.sidebar.selectbox("2. Filtrar por Líder:", ["Todos"] + LIDERES)
+
+# Lógica para filtrar los correos según el líder
+if lider_seleccionado != "Todos":
+    correos_filtrados_lider = df_hc[df_hc['leader'] == lider_seleccionado]['email'].tolist()
+else:
+    correos_filtrados_lider = CORREOS
+
+# 1.3 Filtro por Asesor Individual (depende del líder seleccionado)
+asesor_seleccionado = st.sidebar.selectbox("3. Ver Perfil Detallado de:", ["Equipo Completo"] + correos_filtrados_lider)
+
+# Actualizamos correos_sql para la consulta SQL basado en el filtro de líder
+correos_sql = "'" + "','".join(correos_filtrados_lider) + "'"
+
 # --- 2. CARGA DE DATOS ---
 @st.cache_data(show_spinner="Consultando Metabase...")
-def cargar_datos(inicio, fin):
+def cargar_datos(inicio, fin, correos_sql_param):
     
     query_act = f"""
     SELECT debts.id as debt_id, cr.bank_reference, act.end AS email, (act.executed_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota') AS executed_at
@@ -74,11 +131,12 @@ def cargar_datos(inicio, fin):
     JOIN credit_repairs as cr ON cr.id = debts.credit_repair_id
     WHERE (act.executed_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::DATE >= '{inicio}'
       AND (act.executed_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::DATE <= '{fin}'
-      AND act.payment_to_bank IS NOT NULL AND act.end IN ({correos_sql})
+      AND act.payment_to_bank IS NOT NULL AND act.end IN ({correos_sql_param})
     """
     df_a = extraccion_metabase_final(12, query_act)
     if not df_a.empty:
         df_a['executed_at'] = pd.to_datetime(df_a['executed_at'], format='ISO8601')
+        df_a = df_a[(df_a['executed_at'].dt.hour >= 7) & (df_a['executed_at'].dt.hour <= 19)]
 
     query_log = rf"""
     SELECT log.callid, DATETIME(log.time, 'America/Bogota') AS time, log.event, u.email
@@ -119,7 +177,18 @@ def cargar_datos(inicio, fin):
     
     return df_a, timeline
 
-df_act_raw, df_tl_raw = cargar_datos(f_inicio, f_fin)
+df_act_raw, df_tl_raw = cargar_datos(f_inicio, f_fin, correos_sql)
+
+# --- NUEVA LÓGICA DE FILTRADO PARA LA GRÁFICA ---
+if asesor_seleccionado != "Equipo Completo":
+    # Si seleccionó a alguien, filtramos solo a esa persona
+    emails_a_mostrar = [asesor_seleccionado]
+else:
+    # Si es "Equipo Completo", mostramos a todos los que pertenecen a ese líder
+    emails_a_mostrar = correos_filtrados_lider
+
+df_tl_raw = df_tl_raw[df_tl_raw['email'].isin(emails_a_mostrar)]
+df_act_raw = df_act_raw[df_act_raw['email'].isin(emails_a_mostrar)]
 
 # --- 3. GRÁFICO PRINCIPAL ---
 st.subheader(f"Vista General: {f_inicio} al {f_fin}")
@@ -161,16 +230,17 @@ if not df_act_raw.empty:
         )
     ))
 
+
 fig.update_layout(
     xaxis=dict(type="date", tickformat="%H:%M", title="Hora"),
-    yaxis=dict(title="", categoryorder='category ascending'),
+    # AQUÍ AGREGAMOS tickfont PARA HACER LA LETRA MÁS PEQUEÑA
+    yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=10)), 
     barmode='overlay', 
-    height=len(CORREOS) * 60 + 100,
+    height=len(correos_filtrados_lider) * 60 + 100, # Actualizado para usar la lista filtrada
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     hovermode="closest",
-    margin=dict(l=0, r=0, t=30, b=0) # Ajuste de márgenes para que se vea más limpio
+    margin=dict(l=0, r=0, t=30, b=0)
 )
-
 # Capturamos la selección del gráfico
 seleccion = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
@@ -184,9 +254,6 @@ if seleccion and "selection" in seleccion and seleccion["selection"]["points"]:
 
 st.divider()
 
-# --- 4. PERFIL DEL ASESOR ---
-# Añadimos un selector para poder enfocar a un asesor manualmente
-asesor_seleccionado = st.sidebar.selectbox("🔎 Ver Perfil Detallado de:", ["Equipo Completo"] + CORREOS)
 
 # Si hacen clic en la gráfica, ese clic manda. Si no, manda el desplegable.
 asesor_foco = None
