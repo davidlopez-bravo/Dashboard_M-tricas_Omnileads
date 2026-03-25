@@ -86,7 +86,7 @@ WHERE
 df_hc = extraccion_metabase_final(16, query_hc)[['email', 'leader']]
 CORREOS = df_hc['email'].to_list()
 LIDERES = df_hc['leader'].unique().tolist()
-LIDERES = [x for x in LIDERES if x not in['Natalia Valentina Castro Jimenez', 'Diego Pailles Badía', 'Felipe Castillo Szpoganicz', 'Roberto Carlos Chapman Diaz']]
+LIDERES = [x for x in LIDERES if x not in['Natalia Valentina Castro Jimenez', 'Diego Pailles Badía', 'Felipe Castillo Szpoganicz', 'Roberto Carlos Chapman Diaz', 'Julio Enrique Delgado Diaz']]
 # Tu lista actualizada
 
 correos_sql = "'" + "','".join(CORREOS) + "'"
