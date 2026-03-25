@@ -237,7 +237,7 @@ fig.update_layout(
     # AQUÍ AGREGAMOS tickfont PARA HACER LA LETRA MÁS PEQUEÑA
     yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=10)), 
     barmode='overlay', 
-    height=len(correos_filtrados_lider) * 60 + 100, # Actualizado para usar la lista filtrada
+    height=len(emails_a_mostrar) * 60 + 100, # Actualizado para usar la lista filtrada
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     hovermode="closest",
     margin=dict(l=0, r=0, t=30, b=0)
