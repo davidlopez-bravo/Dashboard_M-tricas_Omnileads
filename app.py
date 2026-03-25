@@ -216,7 +216,7 @@ with c3:
     n_llamadas = len(df_tl_view[df_tl_view['actividad'] == 'llamada']) if not df_tl_view.empty else 0
     st.metric("🎧 Cant. Llamadas", n_llamadas)
 # with c4: ##RECORDAR PONER DESPUÉS
-#     st.metric("📝 Actualizaciones", len(df_act_view) if not df_act_view.empty else 0)
+    st.metric("📝 Actualizaciones", len(df_act_view) if not df_act_view.empty else 0)
 
 # --- 6. TABLA UNIFICADA (Llamadas, Descansos y Actualizaciones) ---
 st.write("### 📋 Historial Completo de Actividades")
