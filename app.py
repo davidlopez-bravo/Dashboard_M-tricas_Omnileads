@@ -42,11 +42,11 @@ st.title("📊 Monitor Integral: Equipo Bravo")
 
 # Tu lista actualizada
 CORREOS = [
-    # 'william.abril@gobravo.com.co', 
-    # 'katherine.marulanda@gobravo.com.co', 'isabel.velasquez@gobravo.com.co',
-    # 'jhonnatan.garcia@gobravo.com.co', 'david.tinjaca@gobravo.com.co', 
+    'william.abril@gobravo.com.co', 
+    'katherine.marulanda@gobravo.com.co', 'isabel.velasquez@gobravo.com.co',
+    'jhonnatan.garcia@gobravo.com.co', 'david.tinjaca@gobravo.com.co', 
     'ivonne.valbuena@gobravo.com.co', 'milena.perez@gobravo.com.co',
-    'sonia.restrepo@gobravo.com.co'#,  'juan.portillo@gobravo.com.co'
+    'sonia.restrepo@gobravo.com.co',  'juan.portillo@gobravo.com.co'
 ]
 correos_sql = "'" + "','".join(CORREOS) + "'"
 COLORES = {'llamada': '#2ca02c', 'descanso': '#d62728', 'actualizacion': '#1f77b4'}
