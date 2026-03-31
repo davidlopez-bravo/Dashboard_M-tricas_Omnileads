@@ -229,7 +229,7 @@ if not df_tl_raw.empty:
 # --- CAMBIO AQUÍ: Actualizaciones como go.Bar para igualar el alto ---
 if not df_act_raw.empty:
     # Definimos un ancho visual muy pequeño (10 segundos) en milisegundos para la barra
-    ancho_visual_ms = 10 * 1000 
+    ancho_visual_ms = 100 * 1000 
     
     fig.add_trace(go.Bar(
         base=df_act_raw['executed_at'], # El punto de inicio es la hora de ejecución
@@ -271,7 +271,7 @@ seleccion = st.plotly_chart(
         'displaylogo': False,      # Quita el logo de Plotly
         'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], # Herramientas extra si quieres anotar
         'modeBarButtonsToRemove': ['lasso2d', 'select2d'], # Limpiamos para que no estorben
-        'displayModeBar': True     # Asegura que la barra de herramientas sea visible
+        'displayModeBar': False     # Asegura que la barra de herramientas sea visible
     }
 )
 
