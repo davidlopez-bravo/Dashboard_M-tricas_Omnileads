@@ -12,7 +12,7 @@ st.set_page_config(page_title="Monitor Integral - Equipo", layout="wide", page_i
 st.markdown("""
 <style>
     /* 1. KPIs Y CONTENEDOR (Lo que ya te gusta) */
-    .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+    .block-container {padding-top: 1rem; padding-bottom: 0rem; background:#A597D1; color:#3C2D61}
     #MainMenu, footer {visibility: hidden;}
 
     [data-testid="stMetric"] {
@@ -58,12 +58,46 @@ st.markdown("""
     }
     [data-testid="stWidgetLabel"] p {
         font-size: 0.8rem !important;
-        margin-bottom: 0px !important;
+        margin-bottom: 0px !important;       
+    }
+            /* 6. COLOR DEL FONDO PRINCIPAL */
+    [data-testid="stAppViewContainer"] {
+        background-color: #f0f2f5; /* Cambia este color por el que quieras */
+    }
+
+    /* 7. COLOR DE LA BARRA LATERAL (SIDEBAR) */
+    [data-testid="stSidebar"] {
+        background-color: #5d3f92; /* Un morado como el de tu logo */
+    }
+
+    /* 8. COLOR DEL TEXTO EN LA SIDEBAR (Opcional, por si pones fondo oscuro) */
+    [data-testid="stSidebar"] .stMarkdown, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] h2 {
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Monitor Integral: Bravo Colombia")
+logo_url = "https://media.licdn.com/dms/image/v2/D4E0BAQGNl0-8M52OUw/company-logo_200_200/B4EZgTsXs1GcAI-/0/1752677055732/bravo_colombia_logo?e=2147483647&v=beta&t=irvJ5n8nwvm2gL4X05j-l58FmMXoUL4ztRwhiwvfqJs"
+
+# Usamos Markdown con HTML
+st.markdown(
+    f"""
+    <br>
+<div style='display: flex; align-items: center;'>
+        <img src='{logo_url}' 
+             style='width: 60px; 
+                    height: 60px; 
+                    border-radius: 15px; 
+                    object-fit: cover; 
+                    margin-right: 15px;
+                    border: 2px solid #5d3f92;'>
+        <h1 style='margin: 0;'>Monitor - Bravo Colombia</h1>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
 
 query_hc = """SELECT 
     email,
