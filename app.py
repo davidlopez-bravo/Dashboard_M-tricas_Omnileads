@@ -33,9 +33,8 @@ st.markdown("""
     }
 
     /* 3. EL "TRUCO" PARA EL CALENDARIO Y DESPLEGABLES */
-    /* En lugar de cambiar ancho por ancho, encogemos TODO el objeto flotante */
     div[data-baseweb="popover"] {
-        transform: scale(0.85) !important; /* Encoge todo al 80% */
+        transform: scale(0.85) !important;
         transform-origin: top left !important;
         z-index: 10000 !important;
     }
@@ -87,8 +86,8 @@ df_hc = extraccion_metabase_final(16, query_hc)[['email', 'leader']]
 CORREOS = df_hc['email'].to_list()
 LIDERES = df_hc['leader'].unique().tolist()
 LIDERES = [x for x in LIDERES if x not in['Natalia Valentina Castro Jimenez', 'Diego Pailles Badía', 'Felipe Castillo Szpoganicz', 'Roberto Carlos Chapman Diaz', 'Julio Enrique Delgado Diaz']]
-# Tu lista actualizada
 
+# Tu lista actualizada
 correos_sql = "'" + "','".join(CORREOS) + "'"
 COLORES = {'llamada': '#2ca02c', 'descanso': '#d62728', 'actualizacion': '#1f77b4'}
 
@@ -119,7 +118,7 @@ else:
 asesor_seleccionado = st.sidebar.selectbox("3. Ver Perfil Detallado de:", ["Equipo Completo"] + correos_filtrados_lider)
 
 # Actualizamos correos_sql para la consulta SQL basado en el filtro de líder
-correos_sql = "'" + "','".join(correos_filtrados_lider) + "'"
+correos_sql_param = "'" + "','".join(correos_filtrados_lider) + "'"
 
 # --- 2. CARGA DE DATOS ---
 @st.cache_data(show_spinner="Consultando Metabase...")
@@ -140,20 +139,25 @@ def cargar_datos(inicio, fin, correos_sql_param):
         df_a = df_a[(df_a['executed_at'].dt.hour >= 7) & (df_a['executed_at'].dt.hour <= 19)]
 
     query_log = rf"""
-    SELECT log.callid, DATETIME(log.time, 'America/Bogota') AS time, log.event, u.email
+    SELECT log.callid, DATETIME(log.time, 'America/Bogota') AS time, log.event, u.email, log.numero_marcado
     FROM omnileads_co_public.reportes_app_llamadalog AS log
     JOIN omnileads_co_public.ominicontacto_app_agenteprofile AS agent ON log.agente_id = agent.id
     JOIN omnileads_co_public.ominicontacto_app_user AS u ON agent.user_id = u.id
     WHERE DATETIME(log.time, 'America/Bogota') >= '{inicio} 00:00:00'
       AND DATETIME(log.time, 'America/Bogota') <= '{fin} 23:59:59'
-      AND u.email in ({correos_sql})
+      AND u.email in ({correos_sql_param})
     """
     df_l = extraccion_metabase_final(50, query_log)
     
     if df_l.empty: return df_a, pd.DataFrame()
 
     df_l['time'] = pd.to_datetime(df_l['time'], format='ISO8601')
-    pivot = df_l.pivot_table(values='time', index=('callid', 'email'), columns='event', aggfunc='min')
+    
+    # 1. Extraemos el mapeo de CallID -> Numero (limpiando nulos)
+    df_nums = df_l[df_l['numero_marcado'].notnull()][['callid', 'numero_marcado']].drop_duplicates('callid')
+
+    # 2. Pivotamos normal (sin meter el número en el index para no romper los tiempos)
+    pivot = df_l.pivot_table(values='time', index=['callid', 'email'], columns='event', aggfunc='min')
     
     if 'DIAL' not in pivot.columns: return df_a, pd.DataFrame()
 
@@ -161,8 +165,15 @@ def cargar_datos(inicio, fin, correos_sql_param):
     llamadas['inicio'] = llamadas.min(axis=1)
     llamadas['fin'] = llamadas.max(axis=1)
     llamadas['actividad'] = 'llamada'
-    llamadas = llamadas.reset_index().sort_values(by=['email', 'inicio'])
+    llamadas = llamadas.reset_index()
 
+    # 3. Le pegamos el número marcado de vuelta usando el callid
+    llamadas = llamadas.merge(df_nums, on='callid', how='left')
+    llamadas['numero_marcado'] = llamadas['numero_marcado'].fillna("Desconocido")
+    
+    llamadas = llamadas.sort_values(by=['email', 'inicio'])
+
+    # Descansos
     descansos = llamadas.copy()
     descansos['inicio_d'] = descansos.groupby('email')['fin'].shift(1)
     descansos = descansos.dropna(subset=['inicio_d'])
@@ -170,15 +181,16 @@ def cargar_datos(inicio, fin, correos_sql_param):
     
     df_desc = pd.DataFrame({
         'email': descansos['email'], 'callid': 'PAUSA',
-        'inicio': descansos['inicio_d'], 'fin': descansos['inicio'], 'actividad': 'descanso'
+        'inicio': descansos['inicio_d'], 'fin': descansos['inicio'], 'actividad': 'descanso',
+        'numero_marcado': 'N/A'
     })
 
-    timeline = pd.concat([llamadas[['email','callid','inicio','fin','actividad']], df_desc])
+    timeline = pd.concat([llamadas[['email','callid','inicio','fin','actividad','numero_marcado']], df_desc])
     timeline['duracion_min'] = ((timeline['fin'] - timeline['inicio']).dt.total_seconds() / 60).round(1)
     
     return df_a, timeline
 
-df_act_raw, df_tl_raw = cargar_datos(f_inicio, f_fin, correos_sql)
+df_act_raw, df_tl_raw = cargar_datos(f_inicio, f_fin, correos_sql_param)
 
 # --- NUEVA LÓGICA DE FILTRADO PARA LA GRÁFICA ---
 if asesor_seleccionado != "Equipo Completo":
@@ -209,22 +221,29 @@ if not df_tl_raw.empty:
                 marker_color=color, 
                 opacity=0.7,
                 text="", 
-                customdata=d[['duracion_min', 'callid', 'fin']],
-                hovertemplate="<b>%{name}</b><br>Asesor: %{y}<br>Inicio: %{base|%H:%M:%S}<br>Fin: %{customdata[2]|%H:%M:%S}<br>Duración: %{customdata[0]} min<extra></extra>"
+                # customdata: [0]=duracion, [1]=callid, [2]=fin, [3]=numero_marcado
+                customdata=d[['duracion_min', 'callid', 'fin', 'numero_marcado']],
+                hovertemplate="<b>%{name}</b><br>Asesor: %{y}<br>Número: <b>%{customdata[3]}</b><br>Inicio: %{base|%H:%M:%S}<br>Fin: %{customdata[2]|%H:%M:%S}<br>Duración: %{customdata[0]} min<extra></extra>"
             ))
 
+# --- CAMBIO AQUÍ: Actualizaciones como go.Bar para igualar el alto ---
 if not df_act_raw.empty:
-    fig.add_trace(go.Scatter(
-        x=df_act_raw['executed_at'], 
+    # Definimos un ancho visual muy pequeño (10 segundos) en milisegundos para la barra
+    ancho_visual_ms = 10 * 1000 
+    
+    fig.add_trace(go.Bar(
+        base=df_act_raw['executed_at'], # El punto de inicio es la hora de ejecución
+        x=[ancho_visual_ms] * len(df_act_raw), # Duración fija y pequeña
         y=df_act_raw['email'], 
-        mode='markers', 
+        orientation='h', 
         name='Actualización',
+        marker_color=COLORES['actualizacion'],
+        opacity=0.8, # Un poco más opaca para que se note al ser delgada
         customdata=df_act_raw[['debt_id', 'bank_reference']], 
-        marker=dict(color=COLORES['actualizacion'], symbol='line-ns-open', size=35, line=dict(width=3)),
         hovertemplate=(
             "<b>Actualización</b><br>" +
             "Asesor: %{y}<br>" +
-            "Hora: %{x|%H:%M:%S}<br>" +
+            "Hora: %{base|%H:%M:%S}<br>" + # Usamos base para mostrar la hora exacta
             "ID Deuda: %{customdata[0]}<br>" +
             "Ref. Banco: %{customdata[1]}" +
             "<extra></extra>"
@@ -234,16 +253,27 @@ if not df_act_raw.empty:
 
 fig.update_layout(
     xaxis=dict(type="date", tickformat="%H:%M", title="Hora"),
-    # AQUÍ AGREGAMOS tickfont PARA HACER LA LETRA MÁS PEQUEÑA
     yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=10)), 
     barmode='overlay', 
-    height=len(emails_a_mostrar) * 60 + 100, # Actualizado para usar la lista filtrada
+    height=len(emails_a_mostrar) * 40 + 100, 
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     hovermode="closest",
-    margin=dict(l=0, r=0, t=30, b=0)
+    margin=dict(l=0, r=0, t=30, b=0),
+    autosize=True
 )
 # Capturamos la selección del gráfico
-seleccion = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+seleccion = st.plotly_chart(
+    fig, 
+    use_container_width=True, 
+    on_select="rerun",
+    config={
+        'scrollZoom': True,        # Activa zoom con la rueda del mouse
+        'displaylogo': False,      # Quita el logo de Plotly
+        'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'], # Herramientas extra si quieres anotar
+        'modeBarButtonsToRemove': ['lasso2d', 'select2d'], # Limpiamos para que no estorben
+        'displayModeBar': True     # Asegura que la barra de herramientas sea visible
+    }
+)
 
 # --- 3.5. EXTRACTOR DE DATOS COPIABLES (Al hacer clic en el gráfico) ---
 if seleccion and "selection" in seleccion and seleccion["selection"]["points"]:
@@ -283,7 +313,7 @@ with c2:
 with c3:
     n_llamadas = len(df_tl_view[df_tl_view['actividad'] == 'llamada']) if not df_tl_view.empty else 0
     st.metric("🎧 Cant. Llamadas", n_llamadas)
-with c4: ##RECORDAR PONER DESPUÉS
+with c4:
     st.metric("📝 Actualizaciones", len(df_act_view) if not df_act_view.empty else 0)
 
 # --- 6. TABLA UNIFICADA (Llamadas, Descansos y Actualizaciones) ---
@@ -293,9 +323,9 @@ frames_tabla = []
 
 if not df_tl_view.empty:
     # Preparamos las llamadas y descansos
-    t1 = df_tl_view[['email', 'actividad', 'inicio', 'fin', 'duracion_min']].rename(columns={'inicio': 'fecha_hora'})
-    t1['detalle'] = "Duración: " + t1['duracion_min'].astype(str) + " min"
-    frames_tabla.append(t1)
+    t1 = df_tl_view[['email', 'actividad', 'inicio', 'fin', 'duracion_min', 'numero_marcado']].rename(columns={'inicio': 'fecha_hora'})
+    t1['detalle'] = t1.apply(lambda x: f"📞 {x['numero_marcado']} | {x['duracion_min']} min" if x['actividad'] == 'llamada' else f"☕ Descanso de {x['duracion_min']} min", axis=1)
+    frames_tabla.append(t1[['email', 'actividad', 'fecha_hora', 'fin', 'detalle']])
 
 if not df_act_view.empty:
     # Preparamos las actualizaciones para que encajen en la misma tabla
@@ -303,28 +333,26 @@ if not df_act_view.empty:
     t2['actividad'] = 'actualizacion'
     t2 = t2.rename(columns={'executed_at': 'fecha_hora'})
     t2['fin'] = pd.NaT # Las actualizaciones son un punto en el tiempo, no tienen fin
-    t2['duracion_min'] = 0.0
-    t2['detalle'] = "ID Deuda: " + t2['debt_id'].astype(str) + " | Ref: " + t2['bank_reference'].astype(str)
-    frames_tabla.append(t2[['email', 'actividad', 'fecha_hora', 'fin', 'duracion_min', 'detalle']])
+    t2['detalle'] = "📝 ID: " + t2['debt_id'].astype(str) + " | Ref: " + t2['bank_reference'].astype(str)
+    frames_tabla.append(t2[['email', 'actividad', 'fecha_hora', 'fin', 'detalle']])
 
 if frames_tabla:
     # Unimos todo y lo ordenamos por hora
     tabla_completa = pd.concat(frames_tabla).sort_values(by='fecha_hora', ascending=False)
     
-    # Reordenamos las columnas para que se lea mejor
-    tabla_completa = tabla_completa[['fecha_hora', 'actividad', 'detalle', 'fin', 'email']]
-    
     st.dataframe(
-        tabla_completa, 
+        tabla_completa[['fecha_hora', 'actividad', 'detalle', 'email']], 
         use_container_width=True, 
         hide_index=True,
         column_config={
-            "fecha_hora": st.column_config.DatetimeColumn("Inicio / Ejecución", format="HH:mm:ss"),
-            "fin": st.column_config.DatetimeColumn("Fin", format="HH:mm:ss"),
-            "actividad": st.column_config.TextColumn("Tipo de Actividad"),
-            "detalle": st.column_config.TextColumn("Información Adicional"),
+            "fecha_hora": st.column_config.DatetimeColumn("Hora", format="HH:mm:ss"),
+            "actividad": st.column_config.TextColumn("Tipo"),
+            "detalle": st.column_config.TextColumn("Información"),
             "email": st.column_config.TextColumn("Asesor")
         }
     )
 else:
-    st.info("No hay datos de actividad para mostrar con los filtros actuales.")
+    st.info("No hay datos de actividad.")
+
+if __name__ == "__main__":
+    pass
