@@ -287,7 +287,12 @@ if not df_act_raw.empty:
 
 fig.update_layout(
     xaxis=dict(type="date", tickformat="%H:%M", title="Hora"),
-    yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=10)), 
+    yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=12, color='#3C2D61', weight='bold')), 
+
+    paper_bgcolor='rgba(0,0,0,0)', # Fondo exterior transparente
+    plot_bgcolor='rgba(0,0,0,0)',  # Fondo interior transparente
+
+
     barmode='overlay', 
     height=len(emails_a_mostrar) * 40 + 100, 
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
