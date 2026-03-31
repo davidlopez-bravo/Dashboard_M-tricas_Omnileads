@@ -286,7 +286,7 @@ if not df_act_raw.empty:
 
 
 fig.update_layout(
-    xaxis=dict(type="date", tickformat="%H:%M", title="Hora"),
+    xaxis=dict(type="date", tickformat="%H:%M", title="Hora", showgrid=True, gridcolor='white'),
     yaxis=dict(title="", categoryorder='category ascending', tickfont=dict(size=12, color='#3C2D61', weight='bold')), 
 
     paper_bgcolor='rgba(0,0,0,0)', # Fondo exterior transparente
